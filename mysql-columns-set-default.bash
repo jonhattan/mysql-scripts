@@ -11,17 +11,22 @@
 #  ./mysql-columns-set-default.bash > /tmp/queries
 #  cat /tmp/queries | mysql
 
+MYSQL_VERSION=$(echo "select substring_index(version(), '-', 1);" | mysql --skip-column-names)
+
 QUERIES=''
 ROWS=$(mysql -s -e "SELECT C.TABLE_SCHEMA, C.TABLE_NAME, C.COLUMN_NAME, C.DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS C INNER JOIN INFORMATION_SCHEMA.TABLES T ON C.TABLE_NAME=T.TABLE_NAME AND T.TABLE_TYPE='BASE TABLE' WHERE C.IS_NULLABLE='NO' AND C.COLUMN_DEFAULT IS NULL AND C.EXTRA NOT LIKE '%auto_increment%' AND C.TABLE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema')")
 
+
 while read DATABASE TABLE COLUMN DATA_TYPE; do
   case $DATA_TYPE in
-    # BLOB and TEXT columns cannot have DEFAULT values. https://dev.mysql.com/doc/refman/8.0/en/blob.html
-    *blob)
-      continue
-      ;;
-    *text)
-      continue
+    # MySQL 8 BLOB and TEXT columns cannot have DEFAULT values. https://dev.mysql.com/doc/refman/8.0/en/blob.html
+    # Before MariaDB 10.2.1, BLOB and TEXT columns could not be assigned a DEFAULT value. This restriction was lifted in MariaDB 10.2.1.
+    *blob | *text)
+      if [[ "$MYSQL_VERSION" > "10.2.1" ]]; then
+        DEFAULT="''"
+      else
+        continue
+      fi
       ;;
     *char)
       DEFAULT="''"
